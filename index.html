@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html>
+	<head>
+		<title>Proof of Concept - Optical link from screen</title>
+		<script>
+			"use strict";
+			var canvas;
+			var ctx;
+			var queue = [];
+			var queuePos = 0;
+			window.onload = init;
+			var bitcolor = [];
+			function init(){
+				canvas = document.getElementById('canvas');
+				ctx = canvas.getContext('2d');
+
+				ctx.beginPath();
+				ctx.arc(200, 200, 100, 0, Math.PI * 2, true); // Outer circle
+				ctx.lineWidth = 25;
+				
+				ctx.stroke();
+			}
+			var lastTimestamp = null;
+			var maxFrameTime = null;
+			var minFrameTime = null;
+			function linkLoop(timeStamp){
+				var bit = null;
+				while (queuePos < queue.length && bit === null) {
+					bit = queue[queuePos++];
+				}
+				if (lastTimestamp !== null) {
+					var framTime =  timeStamp-lastTimestamp;
+					console.log(framTime);
+					maxFrameTime = Math.max(maxFrameTime, framTime);
+					minFrameTime = Math.min(minFrameTime, framTime);
+				}
+				lastTimestamp = timeStamp;
+				if (bit !== null) {
+					ctx.beginPath();
+					ctx.fillStyle = bitcolor[bit];
+					ctx.arc(200, 200, 75+25/2, 0, Math.PI * 2, true); // inner circle
+					ctx.fill();
+
+					// Request next frame
+					window.requestAnimationFrame(linkLoop);
+				} else {
+					ctx.beginPath();
+					ctx.fillStyle = '#ffffff';
+					ctx.arc(200, 200, 75+25/2, 0, Math.PI * 2, true); // inner circle
+					ctx.fill();
+					document.getElementById('debug').innerHTML =
+						"FPS max: "+(1000/minFrameTime)+'<br>'+
+						"FPS min: "+(1000/maxFrameTime)+'<br>';
+
+				}
+			}
+
+			function sendData() {
+				queuePos = 0;
+				queue = [];
+				lastTimestamp = null;
+				maxFrameTime = -Infinity;
+				minFrameTime = Infinity;
+				var formData = new FormData(document.querySelector("form"));
+				bitcolor = [formData.get('color0'), formData.get('color1')];
+
+				var hexData = formData.get('data');
+
+				ctx.fillStyle = '#00d000';
+				ctx.fillRect(/*x:*/10, /*y:*/350, /*width:*/400-2*10, /*height:*/50);
+				var x = 15;
+				for (var i = 0; i < hexData.length; i++) {
+					var current = hexData.charAt(i);
+					if (current == ' ') {
+						x++;
+						queue.push(null);
+					} else {
+						for (var j = 0; j<4; j++) {
+							var bit = ((1 << j) & parseInt(current, 16)) ? 1 : 0;
+							// console.log(current+':'+bit+'(x:'+x+')');
+							queue.push(bit);
+							// Show data as barcode:
+							ctx.fillStyle = bitcolor[bit];
+							ctx.fillRect(x++, 360, 1, 25);
+						}
+					}
+				}
+				// start sending:
+				window.requestAnimationFrame(linkLoop);
+			}
+		</script>
+	<head>
+	<body>
+    	<canvas id="canvas" width="400" height="400" style="width: 400px; height: 400px; border:1px solid lightgrey;"></canvas>
+<form>
+<label for="color0">Color for bit 0</lable> <input id="color0" maxlength="7" name="color0" value="#000000"><br>
+<label for="color1">Color for bit 1</lable> <input id="color1" maxlength="7" name="color1" value="#ff0000"><br>
+<label for="data">Data (HEX)</lable> <input name="data" value="55 55 A DEAD BA7 CA7E AA AA" pattern="[ 0-9a-zA-Z]+" style="width:400px"><br>
+<button  type="button" onclick="sendData(); return false;">Send</button>
+</form>
+<div id="debug"></div>
+	</body>
+</html>
